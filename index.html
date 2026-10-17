@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<title>Verity: Boiler Hunt</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden; background: #000;
+    font-family: Arial, sans-serif; user-select: none; -webkit-user-select: none;
+    touch-action: none; overscroll-behavior: none;
+  }
+  
+  #rotate-overlay {
+    position: fixed; inset: 0; background: #111; color: #fff;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 9999; text-align: center; padding: 20px;
+  }
+  .phone-icon { font-size: 60px; margin-bottom: 20px; animation: rotatePhone 2s infinite ease-in-out; }
+  @keyframes rotatePhone { 0%, 20% { transform: rotate(0deg); } 50%, 80% { transform: rotate(90deg); } 100% { transform: rotate(0deg); } }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate-overlay { display: flex; }
+    #game, #hint, #joystick, #btnMusic, #startScreen, #screamer { display: none !important; }
+  }
+
+  #game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
+  #hint { position: fixed; bottom: 10px; left: 20px; color: #fff; font-weight: bold; font-size: 18px; text-shadow: 2px 2px 0 #000; pointer-events: none; z-index: 5; }
+  @media (max-width: 900px) { #hint { font-size: 12px; bottom: 6px; left: 10px; } }
+
+  #screamer { position: fixed; inset: 0; background: #000 center/cover no-repeat; display: none; z-index: 999; }
+
+  #startScreen {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.9); color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; z-index: 1000; cursor: pointer; padding: 20px;
+  }
+  #startScreen h1 { font-size: 42px; margin-bottom: 20px; color: #ffd700; }
+  #startScreen p { font-size: 18px; margin: 8px 0; opacity: 0.9; }
+  #startScreen .big { font-size: 28px; margin-top: 40px; color: #4caf50; padding: 16px 36px; border: 3px solid #4caf50; border-radius: 12px; background: rgba(76,175,80,0.15); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: 0.85; } }
+  @media (max-height: 500px) {
+    #startScreen h1 { font-size: 24px; margin-bottom: 10px; }
+    #startScreen p { font-size: 14px; }
+    #startScreen .big { font-size: 18px; padding: 10px 20px; margin-top: 20px; }
+  }
+
+  #joystick { position: fixed; left: 30px; bottom: 30px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 3px solid rgba(255,255,255,0.35); z-index: 100; display: none; touch-action: none; }
+  #joyKnob { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; border-radius: 50%; background: rgba(255,215,0,0.75); border: 3px solid rgba(255,255,255,0.7); transform: translate(-50%, -50%); box-shadow: 0 0 20px rgba(255,215,0,0.5); pointer-events: none; }
+  #btnMusic { position: fixed; right: 30px; bottom: 30px; width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.15); border: 3px solid rgba(255,255,255,0.4); color: #fff; font-size: 28px; display: none; align-items: center; justify-content: center; z-index: 100; font-weight: bold; touch-action: none; }
+  @media (max-height: 500px) {
+    #joystick { width: 110px; height: 110px; left: 15px; bottom: 15px; }
+    #joyKnob { width: 46px; height: 46px; }
+    #btnMusic { width: 56px; height: 56px; font-size: 22px; right: 15px; bottom: 15px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="rotate-overlay">
+  <div class="phone-icon">📱</div>
+  <h2>Поверни телефон!</h2>
+  <p>Игра работает только в горизонтальном режиме.</p>
+</div>
+
+<canvas id="game"></canvas>
+<div id="hint">WASD / стрелки — движение, M — музыка, Esc — выход</div>
+<div id="screamer"></div>
+<div id="joystick"><div id="joyKnob"></div></div>
+<div id="btnMusic">🎵</div>
+
+<div id="startScreen">
+  <h1>🟡 VERITY: BOILER HUNT 🔥</h1>
+  <p>Собирай бойлеры, расти и стань огромным...</p>
+  <p>Но помни: если станешь слишком большим — случится страшное.</p>
+  <p class="big">▶ Нажми, чтобы начать</p>
+</div>
+
+<script>
+const CONFIG = {
+  PET_SIZE_BASE: 160, PET_GROW: 6, PET_SIZE_MAX: 800, BOILER_SIZE: 160,
+  MAX_BOILERS: 6, RESPAWN_MS: 1500, SCREAMER_MS: 1000,
+  IMG_PET: "pet.png", IMG_BOILER: "boiler.png", IMG_SCREAM: "scream.jpg", 
+  SND_MUSIC: "music.mp3", SND_SCREAM: "scream.mp3",
+};
+
+let scaleFactor = 1, baseSpeed = 480, offsetY = 0;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  
+  // Если это телефон - уменьшаем и делаем сдвиг от шапки
+  if (W < 900 || H < 600) {
+    scaleFactor = Math.min(W / 1200, H / 600);
+    baseSpeed = 250;
+    offsetY = H * 0.05;
+  } else {
+    scaleFactor = 1;
+    baseSpeed = 480;
+    offsetY = 0;
+  }
+}
+window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => setTimeout(resize, 200));
+resize();
+
+const isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(src); img.src = src;
+  });
+}
+let petOriginal = null, boilerImg = null, screamImg = null;
+
+let pet = { x: 0, y: 0, size: 0, img: null };
+let boilers = [], score = 0, startTime = 0, music = null, screamSound = null, running = false, t = 0;
+function rand(min, max) { return Math.random() * (max - min) + min; }
+
+function spawnBoiler() {
+  const bSize = CONFIG.BOILER_SIZE * scaleFactor;
+  for (let i = 0; i < 50; i++) {
+    const x = rand(20, W - bSize - 20), y = rand(offsetY + 20, H - bSize - 20);
+    if (Math.abs(x - pet.x) > 200 || Math.abs(y - pet.y) > 200) return { x, y, active: true, respawn: 0 };
+  }
+  return { x: rand(20, W - bSize - 20), y: rand(offsetY + 20, H - bSize - 20), active: true, respawn: 0 };
+}
+
+function initBoilers() { boilers = []; for (let i = 0; i < CONFIG.MAX_BOILERS; i++) boilers.push(spawnBoiler()); }
+
+const keys = {};
+window.addEventListener("keydown", (e) => { keys[e.key.toLowerCase()] = true; if (e.key === "Escape") running = false; if (e.key.toLowerCase() === "m") toggleMusic(); });
+window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+
+const joyEl = document.getElementById("joystick"), joyKnob = document.getElementById("joyKnob");
+const joyVector = { x: 0, y: 0 };
+let joyTouchId = null, joyCenter = { x: 0, y: 0 }, JOY_MAX_RADIUS = 70;
+
+function getJoyCenter() { const r = joyEl.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
+joyEl.addEventListener("touchstart", (e) => { e.preventDefault(); const touch = e.changedTouches[0]; joyTouchId = touch.identifier; joyCenter = getJoyCenter(); JOY_MAX_RADIUS = joyEl.offsetWidth * 0.4; updateJoy(touch.clientX, touch.clientY); }, { passive: false });
+joyEl.addEventListener("touchmove", (e) => { e.preventDefault(); for (const touch of e.changedTouches) if (touch.identifier === joyTouchId) updateJoy(touch.clientX, touch.clientY); }, { passive: false });
+function endJoy(e) { for (const touch of e.changedTouches) if (touch.identifier === joyTouchId) { joyTouchId = null; joyVector.x = 0; joyVector.y = 0; joyKnob.style.left = "50%"; joyKnob.style.top = "50%"; } }
+joyEl.addEventListener("touchend", endJoy); joyEl.addEventListener("touchcancel", endJoy);
+
+function updateJoy(tx, ty) {
+  let dx = tx - joyCenter.x, dy = ty - joyCenter.y; const dist = Math.hypot(dx, dy);
+  if (dist > JOY_MAX_RADIUS) { dx = dx / dist * JOY_MAX_RADIUS; dy = dy / dist * JOY_MAX_RADIUS; }
+  const nx = dx / JOY_MAX_RADIUS, ny = dy / JOY_MAX_RADIUS;
+  if (Math.hypot(nx, ny) < 0.15) { joyVector.x = 0; joyVector.y = 0; } else { joyVector.x = nx; joyVector.y = ny; }
+  joyKnob.style.left = (50 + (dx / JOY_MAX_RADIUS) * 50) + "%"; joyKnob.style.top = (50 + (dy / JOY_MAX_RADIUS) * 50) + "%";
+}
+
+function toggleMusic() {
+  if (!music) return;
+  if (music.paused) music.play().catch(()=>{}); else music.pause();
+  const btn = document.getElementById("btnMusic"); if (btn) btn.textContent = music.paused ? "🔇" : "🎵";
+}
+document.getElementById("btnMusic").addEventListener("touchstart", (e) => { e.preventDefault(); toggleMusic(); }, { passive: false });
+document.getElementById("btnMusic").addEventListener("click", (e) => { e.preventDefault(); toggleMusic(); });
+
+function playScreamer() {
+  running = false;
+  if (music) try { music.pause(); } catch(e){}
+  if (screamSound) try { screamSound.pause(); } catch(e){}
+  
+  const scr = document.getElementById("screamer");
+  if (screamImg) scr.style.backgroundImage = `url("${screamImg.src}")`; else scr.style.background = "red";
+  scr.style.display = "block";
+  
+  if (screamSound) { screamSound.currentTime = 0; screamSound.volume = 1.0; screamSound.play().catch(e => console.warn(e)); }
+  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 600]);
+  
+  setTimeout(() => {
+    window.close(); scr.style.backgroundImage = "none"; scr.style.background = "#000";
+    document.getElementById("hint").style.display = "none"; if (joyEl) joyEl.style.display = "none";
+    if (document.getElementById("btnMusic")) document.getElementById("btnMusic").style.display = "none";
+  }, CONFIG.SCREAMER_MS);
+}
+
+function update(dt) {
+  let dx = 0, dy = 0;
+  if (keys["arrowleft"] || keys["a"] || keys["ф"]) dx -= 1;
+  if (keys["arrowright"] || keys["d"] || keys["в"]) dx += 1;
+  if (keys["arrowup"] || keys["w"] || keys["ц"]) dy -= 1;
+  if (keys["arrowdown"] || keys["s"] || keys["ы"]) dy += 1;
+  if (joyVector.x !== 0 || joyVector.y !== 0) { dx = joyVector.x; dy = joyVector.y; }
+  
+  const mag = Math.hypot(dx, dy); if (mag > 1) { dx /= mag; dy /= mag; }
+  pet.x += dx * baseSpeed * dt; pet.y += dy * baseSpeed * dt;
+
+  pet.x = Math.max(0, Math.min(W - pet.size, pet.x));
+  pet.y = Math.max(offsetY, Math.min(H - pet.size, pet.y));
+
+  const margin = pet.size * 0.18;
+  const pr = { x: pet.x + margin, y: pet.y + margin, w: pet.size - margin * 2, h: pet.size - margin * 2 };
+  const now = performance.now(); const actualBoilerSize = CONFIG.BOILER_SIZE * scaleFactor;
+
+  for (const b of boilers) {
+    if (b.active) {
+      const hit = pr.x < b.x + actualBoilerSize && pr.x + pr.w > b.x && pr.y < b.y + actualBoilerSize && pr.y + pr.h > b.y;
+      if (hit) {
+        b.active = false; b.respawn = now + CONFIG.RESPAWN_MS; score++;
+        if (pet.size < CONFIG.PET_SIZE_MAX * scaleFactor) {
+          const cx = pet.x + pet.size / 2, cy = pet.y + pet.size / 2;
+          pet.size = Math.min(CONFIG.PET_SIZE_MAX * scaleFactor, pet.size + CONFIG.PET_GROW * scaleFactor);
+          pet.x = cx - pet.size / 2; pet.y = cy - pet.size / 2;
+          if (pet.size >= CONFIG.PET_SIZE_MAX * scaleFactor && running) { playScreamer(); return; }
+        }
+      }
+    } else if (now >= b.respawn) {
+      const nb = spawnBoiler(); b.x = nb.x; b.y = nb.y; b.active = true;
+    }
+  }
+}
+
+function drawFlagBackground() {
+  const h3 = H / 3;
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, h3);
+  ctx.fillStyle = "#0039a6"; ctx.fillRect(0, h3, W, h3);
+  ctx.fillStyle = "#d52b1e"; ctx.fillRect(0, h3 * 2, W, h3);
+}
+
+function drawUI() {
+  ctx.save(); const scale = Math.min(W, H) < 600 ? 0.6 : 1; ctx.textAlign = "right";
+  ctx.font = `bold ${48 * scale}px Arial`;
+  ctx.fillStyle = "#000"; ctx.fillText("Бойлеры: " + score, W - 27 * scale, 63 * scale + offsetY);
+  ctx.fillStyle = "#fff"; ctx.fillText("Бойлеры: " + score, W - 30 * scale, 60 * scale + offsetY);
+
+  const elapsed = Math.floor((performance.now() - startTime) / 1000);
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, "0"); const ss = String(elapsed % 60).padStart(2, "0");
+  
+  ctx.font = `bold ${28 * scale}px Arial`;
+  ctx.fillStyle = "#000"; ctx.fillText(`Время: ${mm}:${ss}`, W - 28 * scale, 113 * scale + offsetY);
+  ctx.fillStyle = "#fff"; ctx.fillText(`Время: ${mm}:${ss}`, W - 30 * scale, 110 * scale + offsetY);
+
+  const displaySize = Math.round(pet.size / scaleFactor);
+  ctx.fillStyle = "#000"; ctx.fillText(`Размер: ${displaySize}`, W - 28 * scale, 153 * scale + offsetY);
+  ctx.fillStyle = "#fff"; ctx.fillText(`Размер: ${displaySize}`, W - 30 * scale, 150 * scale + offsetY);
+  ctx.restore();
+}
+
+let lastTime = performance.now();
+function loop(now) {
+  let dt = (now - lastTime) / 1000; lastTime = now; if (dt > 0.1) dt = 0.1;
+  if (running) { t += 5 * dt; update(dt); }
+
+  drawFlagBackground();
+  const actualBoilerSize = CONFIG.BOILER_SIZE * scaleFactor;
+  
+  for (const b of boilers) if (b.active && boilerImg) ctx.drawImage(boilerImg, b.x, b.y, actualBoilerSize, actualBoilerSize);
+  if (pet.img) {
+    const bob = Math.sin(t) * 6;
+    // Жесткая отрисовка квадратом (без сплющивания)
+    ctx.drawImage(pet.img, pet.x, pet.y + bob, pet.size, pet.size);
+  }
+  
+  drawUI();
+  requestAnimationFrame(loop);
+}
+
+async function startGame() {
+  document.getElementById("startScreen").style.display = "none";
+  if (isTouch) { joyEl.style.display = "block"; document.getElementById("btnMusic").style.display = "flex"; document.getElementById("hint").textContent = "Джойстик — движение, 🎵 — музыка"; }
+
+  try {
+    petOriginal = await loadImage(CONFIG.IMG_PET);
+    boilerImg = await loadImage(CONFIG.IMG_BOILER);
+    screamImg = await loadImage(CONFIG.IMG_SCREAM).catch(() => null);
+
+    pet.img = petOriginal;
+    pet.size = CONFIG.PET_SIZE_BASE * scaleFactor; 
+    pet.x = W / 2 - pet.size / 2; pet.y = H / 2 - pet.size / 2;
+    initBoilers();
+
+    music = new Audio(CONFIG.SND_MUSIC); music.loop = true; music.volume = 0.7; music.play().catch(e => console.warn(e));
+    screamSound = new Audio(CONFIG.SND_SCREAM); screamSound.volume = 1.0; screamSound.preload = "auto";
+
+    score = 0; t = 0; startTime = performance.now(); running = true;
+
+    if (isTouch && screamSound) {
+      screamSound.volume = 0.01; screamSound.play().then(() => { screamSound.pause(); screamSound.currentTime = 0; screamSound.volume = 1.0; }).catch(()=>{});
+    }
+  } catch (e) { alert("Ошибка загрузки ресурсов: " + e); }
+}
+
+document.getElementById("startScreen").addEventListener("click", startGame);
+document.getElementById("startScreen").addEventListener("touchend", (e) => { e.preventDefault(); startGame(); }, { passive: false });
+requestAnimationFrame(loop);
+
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+</script>
+</body>
+</html>
