@@ -6,6 +6,16 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <title>Verity: Boiler Hunt</title>
+
+<!-- ========================================== -->
+<!-- СКРИПТ АНАЛИТИКИ VERCEL (ДОБАВЛЕН СЮДА)  -->
+<!-- ========================================== -->
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<!-- ========================================== -->
+
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -14,13 +24,20 @@
     touch-action: none; overscroll-behavior: none;
   }
   
+  /* ПРИНУДИТЕЛЬНЫЙ ПОВОРОТ ЭКРАНА */
   #rotate-overlay {
     position: fixed; inset: 0; background: #111; color: #fff;
     display: none; flex-direction: column; align-items: center; justify-content: center;
     z-index: 9999; text-align: center; padding: 20px;
   }
+  #rotate-overlay h2 { font-size: 24px; margin-bottom: 10px; color: #ffd700; }
+  #rotate-overlay p { font-size: 16px; }
   .phone-icon { font-size: 60px; margin-bottom: 20px; animation: rotatePhone 2s infinite ease-in-out; }
-  @keyframes rotatePhone { 0%, 20% { transform: rotate(0deg); } 50%, 80% { transform: rotate(90deg); } 100% { transform: rotate(0deg); } }
+  @keyframes rotatePhone {
+    0%, 20% { transform: rotate(0deg); }
+    50%, 80% { transform: rotate(90deg); }
+    100% { transform: rotate(0deg); }
+  }
   @media (orientation: portrait) and (pointer: coarse) {
     #rotate-overlay { display: flex; }
     #game, #hint, #joystick, #btnMusic, #startScreen, #screamer { display: none !important; }
@@ -95,7 +112,6 @@ function resize() {
   W = canvas.width = window.innerWidth;
   H = canvas.height = window.innerHeight;
   
-  // Если это телефон - уменьшаем и делаем сдвиг от шапки
   if (W < 900 || H < 600) {
     scaleFactor = Math.min(W / 1200, H / 600);
     baseSpeed = 250;
@@ -256,7 +272,6 @@ function loop(now) {
   for (const b of boilers) if (b.active && boilerImg) ctx.drawImage(boilerImg, b.x, b.y, actualBoilerSize, actualBoilerSize);
   if (pet.img) {
     const bob = Math.sin(t) * 6;
-    // Жесткая отрисовка квадратом (без сплющивания)
     ctx.drawImage(pet.img, pet.x, pet.y + bob, pet.size, pet.size);
   }
   
